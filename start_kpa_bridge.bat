@@ -1,6 +1,6 @@
 @echo off
 REM ======================================================================
-REM  start_kpa_bridge.bat  -  starts the KPA1500 SDR bridge (Thetis, NereusSDR, HL2, SDR-VST3 and FlexRadio SmartSDR; LP-100A)
+REM  start_kpa_bridge.bat  -  starts the KPA Bridge (Thetis, NereusSDR, HL2, SDR-VST3 and FlexRadio SmartSDR; LP-100A)
 REM ======================================================================
 REM
 REM  WHAT THIS FILE DOES
@@ -262,12 +262,26 @@ if defined FLEX_RADIO_FALLBACK_IP set "FLEX_FLAGS=%FLEX_FLAGS% --flex-radio-fall
 if "%FLEX_INTERLOCK%"=="1" set "FLEX_FLAGS=%FLEX_FLAGS% --flex-interlock"
 if "%FLEX_VERBOSE%"=="1" set "FLEX_FLAGS=%FLEX_FLAGS% --flex-verbose"
 :flex_done
+%PYCMD% "%BRIDGE_DIR%\%BRIDGE_SCRIPT%" --check-running >nul 2>&1
+if errorlevel 3 goto already_running
+goto prepare_start
+:already_running
+echo.
+echo KPA Bridge is already running (or an older KPA1500 bridge).
+choice /c YN /n /m "Stop it now?  Y = stop it,  N = leave it running: "
+if errorlevel 2 goto after_bridge
+echo Stopping the bridge ...
+%PYCMD% "%BRIDGE_DIR%\%BRIDGE_SCRIPT%" --stop-running
+timeout /t 3 >nul
+exit /b 0
+:prepare_start
 set "WINSTATE="
 if "%START_MINIMIZED%"=="1" set "WINSTATE=/min"
 
 pushd "%BRIDGE_DIR%"
-echo Starting the KPA1500 SDR bridge (an older bridge that is still running is closed first)...
-start "kpa-bridge" %WINSTATE% cmd /c %PYCMD% "%BRIDGE_SCRIPT%" --replace %BRIDGE_FLAGS% %FLEX_FLAGS% ^& if errorlevel 1 pause
+echo Starting KPA Bridge (an older bridge that is still running is closed first)...
+if defined FLEX_FLAGS echo   FlexRadio: %FLEX_FLAGS%   (status page http://127.0.0.1:8080/flex)
+start "KPA Bridge" %WINSTATE% cmd /c %PYCMD% "%BRIDGE_SCRIPT%" --replace %BRIDGE_FLAGS% %FLEX_FLAGS% ^& if errorlevel 1 pause
 popd
 goto after_bridge
 

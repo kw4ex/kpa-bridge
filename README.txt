@@ -1,4 +1,4 @@
-kpa-bridge  (EXPERIMENTAL)
+KPA Bridge  (EXPERIMENTAL)
 ==========================
 One program for your Elecraft KPA1500 with Thetis, Thetis HL2, SDR-VST3,
 NereusSDR and a FlexRadio running SmartSDR (the amp is shown there as a

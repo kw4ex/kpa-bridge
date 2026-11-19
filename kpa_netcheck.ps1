@@ -21,13 +21,13 @@ ping -n 2 -w 800 192.168.0.175
 "=== python processes running the bridge ==="
 try { Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*kpa1500*' } | ForEach-Object { "{0} {1}: {2}" -f $_.ProcessId, $_.Name, $_.CommandLine } } catch { "ERROR: " + $_.Exception.Message }
 "=== bridge: running? ==="
-& py -3 kpa1500_sdr_bridge.py --check-running 2>&1
+& py -3 kpa_bridge.py --check-running 2>&1
 "exit code $LASTEXITCODE"
 "=== bridge: probe 192.168.0.175 ==="
-& py -3 kpa1500_sdr_bridge.py --probe 192.168.0.175 2>&1
+& py -3 kpa_bridge.py --probe 192.168.0.175 2>&1
 "exit code $LASTEXITCODE"
 "=== bridge: search the network ==="
-& py -3 kpa1500_sdr_bridge.py --discover 2>&1
+& py -3 kpa_bridge.py --discover 2>&1
 "exit code $LASTEXITCODE"
 "=== firewall rules mentioning python or KPA ==="
 (netsh advfirewall firewall show rule name=all verbose | Out-String) -split "(\r?\n){2,}" | Where-Object { $_ -match 'python|KPA1500' } | Out-String -Width 300

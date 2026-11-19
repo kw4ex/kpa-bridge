@@ -48,7 +48,7 @@ netsh advfirewall firewall show rule name="KPA Bridge Flex TCP 9008" >nul 2>&1 &
 netsh advfirewall firewall show rule name="KPA Bridge Flex TCP 9010" >nul 2>&1 && set "FW=1"
 netsh advfirewall firewall show rule name="KPA Bridge Flex UDP 4992" >nul 2>&1 && set "FW=1"
 if "%FW%"=="0" (
-  echo No kpa-bridge firewall rules found. Nothing to do.
+  echo No KPA Bridge firewall rules found. Nothing to do.
   goto fwdone
 )
 > "%TEMP%\kpa_fw_remove.bat" echo @echo off
@@ -79,7 +79,7 @@ echo This folder may hold other things too. Only the bridge's own files are dele
 echo never the folder's other contents.
 set /p DEL=Delete the bridge's own files (program, help, settings, logs)? (y/N): 
 if /i not "%DEL%"=="y" goto keep
-for %%F in (kpa_bridge.py kpa_thetis_setup.py KPA_Bridge_Help.html start_kpa_bridge.bat Setup_Thetis_Containers.bat Undo_Thetis_Containers.bat kpa1500_settings.json kpa1500_bridge.log kpa1500_bridge.log.tmp install_log.txt install_selftest.txt kpa1500_mac.txt KPA_Network_Check.bat kpa_netcheck.ps1 kpa_network_check.txt Open_Applet.bat Stop_Bridge.bat README_SDR_Bridge.txt KPA1500-SDR-Bridge-guide.pdf kpa_flex_emulation.py kpa_page_opener.py README.txt LICENSE Run_Selftest.bat selftest_result.txt flex_selftest_result.txt) do del "%~dp0%%F" 2>nul
+for %%F in (kpa_bridge.py kpa_thetis_setup.py KPA_Bridge_Help.html start_kpa_bridge.bat Setup_Thetis_Containers.bat Undo_Thetis_Containers.bat kpa1500_settings.json kpa1500_bridge.log kpa1500_bridge.log.tmp install_log.txt install_selftest.txt kpa1500_mac.txt KPA_Network_Check.bat kpa_netcheck.ps1 kpa_network_check.txt Open_Applet.bat Stop_Bridge.bat README_SDR_Bridge.txt KPA1500-SDR-Bridge-guide.pdf kpa_flex_emulation.py kpa_page_opener.py kpa_bridge.ico README.txt LICENSE Run_Selftest.bat selftest_result.txt flex_selftest_result.txt) do del "%~dp0%%F" 2>nul
 del "%~dp0kpa_bridge.py.*.bak" 2>nul
 del "%~dp0kpa_flex_emulation.py.*.bak" 2>nul
 del "%~dp0start_kpa_bridge.bat.*.bak" 2>nul

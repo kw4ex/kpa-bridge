@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kpa_bridge.py  -  kpa-bridge: Elecraft KPA1500 <-> Thetis / NereusSDR / HL2 / SDR-VST3 (TCI) and FlexRadio SmartSDR (PGXL/TGXL) <-> LP-100A
+kpa_bridge.py  -  KPA Bridge: Elecraft KPA1500 <-> Thetis / NereusSDR / HL2 / SDR-VST3 (TCI) and FlexRadio SmartSDR (PGXL/TGXL) <-> LP-100A
 ==============================================================================
 Concept, design and on-air testing: KW4EX.
 
@@ -213,8 +213,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "3.0f"
-BUILD_DATE = "2026-11-17"
+VERSION = "3.0g"
+BUILD_DATE = "2026-11-18"
 
 # Flex part (v3.0): shows the KPA1500 to FlexRadio SmartSDR as a PGXL amplifier and TGXL tuner.
 # Lives in its own file; nothing happens unless --flex-emulate is given.
@@ -3989,7 +3989,7 @@ class Bridge:
             try:
                 if os.name == "nt" and os.path.exists(bat):
                     # the same start file you use by hand (keeps your options); the new copy closes this one
-                    subprocess.Popen(["cmd", "/c", "start", "KPA1500 SDR Bridge", bat], cwd=here,
+                    subprocess.Popen(["cmd", "/c", "start", "KPA Bridge", bat], cwd=here,
                                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 else:
                     subprocess.Popen([sys.executable] + sys.argv, cwd=here, start_new_session=(os.name != "nt"))
@@ -4973,8 +4973,8 @@ class Bridge:
 
     def run(self):
         if os.name == "nt":
-            os.system("title KPA1500 SDR Bridge v%s" % VERSION)
-        print("KPA1500 SDR bridge  v%s (%s)   amp %s:%d   TCI %s:%d%s%s" % (
+            os.system("title KPA Bridge v%s" % VERSION)
+        print("KPA Bridge  v%s (%s)   amp %s:%d   TCI %s:%d%s%s" % (
             VERSION, BUILD_DATE,
             self.amp.addr[0], self.amp.addr[1], self.a.tci_host, self.a.tci_port,
             "   [DRY-RUN: nothing is sent to the amp]" if self.a.dry_run else "",
@@ -5274,7 +5274,7 @@ def help_sections():
 
     S = []
     S.append(("overview", "1. What this is", [
-        _P("kpa-bridge (experimental) is a small program that runs on a PC next to your radio program. "
+        _P("KPA Bridge (experimental) is a small program that runs on a PC next to your radio program. "
            "It connects Thetis, Thetis HL2, SDR-VST3 or NereusSDR, and/or a FlexRadio running SmartSDR, "
            "to the Elecraft KPA1500 amplifier and (optionally) the Telepost LP-100A power meter over your network. "
            "Only one radio is on the air at a time; the amplifier follows the one in use. "
@@ -5354,13 +5354,14 @@ def help_sections():
            "and add `--amp-ip 192.168.0.xxx` to the BRIDGE_FLAGS line (see Customizing). Not sure of the "
            "address? Use `--amp-ip auto`, or see Finding the amplifier on the network."),
         _NOTE("Only one bridge can run at a time (the amplifier and the knob allow one user). The older "
-              "The older bridges (`kpa1500_thetis_bridge.py`, `kpa1500_sdr_bridge.py`, the SmartSDR bridge) can stay on the disk, but this bridge closes one that is running when it starts."),
+              "The older bridges (`kpa1500_thetis_bridge.py`, `kpa1500_sdr_bridge.py`, the KPA1500 SmartSDR Bridge) can stay on the disk, but this bridge closes one that is running when it starts."),
     ]))
     S.append(("start", "4. Starting and stopping", [
-        _UL(r"Double-click `start_kpa_bridge.bat`. It starts the bridge in its own window. If a bridge "
-            "(this one or the older Thetis-only one) is already running, it is closed first, so you never "
-            "get two copies or leftover windows.",
-            "That window is minimized by default: look for **KPA1500 SDR Bridge** on the taskbar.",
+        _UL(r"Double-click the **KPA Bridge** shortcut (or `start_kpa_bridge.bat`). If no bridge is running it starts "
+            "the bridge in its own window, with no questions. If a bridge (this one or an older KPA1500 bridge) is "
+            "already running, it asks **Stop it now? Y or N**: Y stops it, N leaves it running. So the same shortcut "
+            "starts and stops, and you never get two copies or leftover windows.",
+            "That window is minimized by default: look for **KPA Bridge** on the taskbar.",
             "**Stop it cleanly:** double-click `Stop_Bridge.bat`, or in the Applet click **Look**, scroll to "
             "**Bridge** and press **Quit bridge**, or press **Q** in the bridge window. All of these close the "
             "bridge, its window and the Applet window. Ctrl+C also works.",
@@ -5629,7 +5630,7 @@ def help_sections():
            "Linux with simulated equipment so far. The Thetis container windows are Windows-only."),
         _UL("**Install:** open Terminal, type `bash `, drag Install_KPA_Bridge.sh into the window, "
             "press Enter and answer the questions. The default folder is RadioScripts in your home folder.",
-            "**Start / stop:** start_kpa_sdr_bridge.sh and stop_bridge.sh (on a Mac the .command files "
+            "**Start / stop:** start_kpa_bridge.sh and stop_bridge.sh (on a Mac the .command files "
             "can be double-clicked). Options are in kpa1500_start.conf.",
             "**Serial ports** look like /dev/cu.usbserial-XXXX (Mac) or /dev/ttyUSB0 (Linux).",
             "**Remove everything:** run uninstall_kpa_bridge.sh in the install folder; it asks "
@@ -6295,8 +6296,9 @@ SWR %tatg.amp_swr%   TMP %tatg.amp_temp% C   FLT %tatg.amp_fault_text%
     S.append(("about", "18. About this version", [
         _P("Revision %s (%s)." % (VERSION, BUILD_DATE)),
         _P("Concept, design and on-air testing: KW4EX."),
-        _P("kpa-bridge is the one program that replaces three earlier ones: the Thetis-only bridge, the SDR bridge "
-           "(Thetis, NereusSDR, Thetis HL2, SDR-VST3) and the SmartSDR bridge (FlexRadio). It is experimental. "
+        _P("KPA Bridge is essentially the KPA1500 SDR Bridge (Thetis, NereusSDR, Thetis HL2, SDR-VST3) and the "
+           "KPA1500 SmartSDR Bridge (FlexRadio SmartSDR) combined into one program. It is experimental. The older "
+           "bridges stay available. "
            "It can be installed next to them; only one bridge runs at a time."),
         _P("The revision is shown on the first line of the bridge window, in the window title, "
            "and in the panel (top right and under Settings)."),
@@ -6338,7 +6340,7 @@ def render_help_html():
     out.append("""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>kpa-bridge Help</title>
+<title>KPA Bridge Help</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--fg:#14212b;--fg2:#4a5b68;--line:#c9d3db;--acc:#0f6a85;--code:#e8eef2;--warn:#fff3e0;--wl:#d98200;--note:#e6f3f7;--nl:#16708c}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1216;--card:#151e25;--fg:#e1e8ed;--fg2:#9fb0bc;--line:#26343d;--acc:#54b6d2;--code:#1f2d36;--warn:#33250f;--wl:#e8a33d;--note:#102a33;--nl:#54b6d2}}
@@ -6359,7 +6361,7 @@ figure{margin:1rem 0;text-align:center}figure img{max-width:100%;height:auto;bor
 figcaption{color:var(--fg2);font-size:.88rem;margin-top:.3rem}
 @media print{nav,.top{display:none}body{background:#fff;color:#000}}
 </style></head><body><div class="wrap">""")
-    out.append("<h1>kpa-bridge Help</h1>")
+    out.append("<h1>KPA Bridge Help</h1>")
     out.append('<div class="sub">Revision %s (%s) &middot; Thetis / NereusSDR / FlexRadio &harr; Elecraft KPA1500 &harr; LP-100A'
                ' &middot; design by KW4EX</div>'
                % (html.escape(VERSION), html.escape(BUILD_DATE)))
@@ -9676,7 +9678,7 @@ def selftest():
     with urllib.request.urlopen(base + "/help", timeout=3) as r:
         served = r.read().decode()
         ctype = r.headers.get("Content-Type", "")
-    check("GET /help serves the help page", "kpa-bridge Help" in served and "KPA_ATU_TOGGLE" in served
+    check("GET /help serves the help page", "KPA Bridge Help" in served and "KPA_ATU_TOGGLE" in served
           and "text/html" in ctype)
     bridge.a.web_token = "pw"
     try:
@@ -9689,7 +9691,7 @@ def selftest():
     hf = os.path.join(tempfile.gettempdir(), "kpa_help_%d.html" % os.getpid())
     out = subprocess.run([sys.executable, me, "--write-help", hf], capture_output=True, text=True)
     check("--write-help creates the help file", out.returncode == 0 and os.path.exists(hf)
-          and "kpa-bridge Help" in open(hf, encoding="utf-8").read())
+          and "KPA Bridge Help" in open(hf, encoding="utf-8").read())
     os.remove(hf)
     out = subprocess.run([sys.executable, me, "--print-help"], capture_output=True, text=True)
     check("--print-help prints the text help", out.returncode == 0 and "What you need" in out.stdout)
