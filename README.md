@@ -1,6 +1,6 @@
 # KPA Bridge (experimental)
 
-**Experimental. Windows only for now.** The installer and helper files are Windows batch files. Versions for Mac, Linux and Raspberry Pi are planned and are not released yet.
+**Experimental. Windows, Mac and Linux.** The Windows files in this repository are batch files. Mac and Linux have their own installer, `KPA_Bridge_v3.0g_Mac_Linux.zip`, in the [latest release's Assets](https://github.com/kw4ex/kpa-bridge/releases/tag/v3.0g) (unzip it and double-click `Install_KPA_Bridge.command`). It was tested by KW4EX on a Mac; Linux is less tested. A Raspberry Pi version has not been tested yet.
 
 **KPA Bridge is essentially the [KPA1500 SDR Bridge](https://github.com/kw4ex/kpa1500-sdr-bridge) and the [KPA1500 SmartSDR Bridge](https://github.com/kw4ex/kpa1500-smartsdr-bridge) combined into one program.** One install connects an Elecraft **KPA1500** amplifier to **Thetis** (also Thetis HL2 and SDR-VST3), **NereusSDR**, and a **FlexRadio running SmartSDR**, where the amplifier shows up as a **Power Genius XL** and a **Tuner Genius XL**. Only one radio is on the air at a time; the amplifier follows the one in use. An optional Telepost LP-100A meter and a FlexControl knob are supported. The two older bridges stay available and are not changed.
 
