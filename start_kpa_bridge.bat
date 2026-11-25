@@ -205,11 +205,14 @@ REM    FLEX_ENABLE = 1 to use it, 0 for Thetis / NereusSDR only.
 REM    FLEX_RADIO_IP = auto looks for the radio on the network; if none is found the bridge says so once
 REM      and keeps looking quietly, so this is safe to leave on when you only use Thetis. Empty = no login.
 REM    FLEX_RADIO_FALLBACK_IP = used only when auto finds nothing.
+REM    FLEX_RADIO_MATCH = with two or more FlexRadios on your network: part of the radio's model, name or serial
+REM      number (for example 6300), so the bridge logs in to the right one. Empty = the first radio it hears.
 REM    FLEX_INTERLOCK = 1 also makes the radio wait for the amp before it transmits (experimental).
 REM    FLEX_VERBOSE = 1 logs every message to and from the radio (only when something does not work).
 set "FLEX_ENABLE=1"
 set "FLEX_RADIO_IP=auto"
 set "FLEX_RADIO_FALLBACK_IP="
+set "FLEX_RADIO_MATCH="
 set "FLEX_INTERLOCK=0"
 set "FLEX_VERBOSE=0"
 REM  Flags for the bridge (see section A):
@@ -259,6 +262,7 @@ goto flex_done
 set "FLEX_FLAGS=--flex-emulate"
 if defined FLEX_RADIO_IP set "FLEX_FLAGS=%FLEX_FLAGS% --flex-radio-ip %FLEX_RADIO_IP%"
 if defined FLEX_RADIO_FALLBACK_IP set "FLEX_FLAGS=%FLEX_FLAGS% --flex-radio-fallback-ip %FLEX_RADIO_FALLBACK_IP%"
+if defined FLEX_RADIO_MATCH set "FLEX_FLAGS=%FLEX_FLAGS% --flex-radio-match %FLEX_RADIO_MATCH%"
 if "%FLEX_INTERLOCK%"=="1" set "FLEX_FLAGS=%FLEX_FLAGS% --flex-interlock"
 if "%FLEX_VERBOSE%"=="1" set "FLEX_FLAGS=%FLEX_FLAGS% --flex-verbose"
 :flex_done

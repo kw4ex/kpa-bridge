@@ -250,6 +250,9 @@ def add_arguments(p):
     g.add_argument("--flex-radio-ip", default="", metavar="IP",
                    help="EXPERIMENTAL: log in to this FlexRadio so SmartSDR shows the amp "
                         "and tuner ('auto' = look for the radio). Implies --flex-emulate")
+    g.add_argument("--flex-radio-match", default="", metavar="TEXT",
+                   help="with --flex-radio-ip auto and more than one FlexRadio on the network: log in to the radio "
+                        "whose model, name, serial number or address contains TEXT (for example 6300)")
     g.add_argument("--flex-radio-fallback-ip", default="", metavar="IP",
                    help="used when --flex-radio-ip auto finds no radio within a few seconds")
     g.add_argument("--flex-no-follow-freq", action="store_true",
@@ -549,9 +552,16 @@ class FlexRadioLink(threading.Thread):
                         self.emu.log("FLEX radio: %s (will keep trying)" % e)
                 if self.state != "searching":
                     self.state = "error"
+            else:
+                self._fails = 0
             finally:
                 self._drop()
-            self.emu.stop.wait(5.0)
+            # be gentle with the radio: wait longer after each failed try (5, 10, 20, 40, then 60 seconds)
+            # and start again at 5 seconds once a login has worked
+            if self.state == "registered":
+                self._fails = 0
+            self._fails = getattr(self, "_fails", 0) + 1
+            self.emu.stop.wait(min(60.0, 5.0 * (2 ** min(self._fails - 1, 4))))
 
     def _drop(self):
         s, self.sock = self.sock, None
@@ -578,8 +588,16 @@ class FlexRadioLink(threading.Thread):
         elif ip.lower() == "auto":
             self.state = "searching"
             ip = discover_radio(6.0, self.emu.stop)
+            if len(LAST_RADIOS) > 1:
+                self.emu.log("FLEX radio: found %d FlexRadios on the network: %s" % (
+                    len(LAST_RADIOS), "; ".join("%s %s %s" % (r[1] or "?", r[2] or "", r[0]) for r in LAST_RADIOS)))
+            if ip and len(LAST_RADIOS) > 1 and not FLEX_MATCH:
+                self.emu.log("FLEX radio: no radio was chosen, so the first one is used (%s). To choose, start with "
+                             "--flex-radio-match 6300 (or its name, serial number or address)" % ip)
             if ip:
                 self.emu.log("FLEX radio: found a FlexRadio at %s" % ip)
+            elif FLEX_MATCH and LAST_RADIOS:
+                self.emu.log("FLEX radio: none of the radios found matches \"%s\"" % FLEX_MATCH)
             elif self.emu.radio_fallback:
                 ip = self.emu.radio_fallback
                 self.emu.log("FLEX radio: none found by searching - using the address you gave: %s" % ip)
@@ -796,18 +814,25 @@ class FlexRadioLink(threading.Thread):
             m = re.match(r"(\d+)\.(\w+)=(.*)$", part.strip())
             if m:
                 items.setdefault(int(m.group(1)), {})[m.group(2)] = m.group(3)
-        mine = set(n for n, _, _ in self.meters)
-        ok_nums = set(x.lower() for x in (self.handles.get(PGXL_MODEL, ""), "0x" + self.radio_handle) if x)
-        for mid, kv in items.items():
-            if kv.get("src") != "AMP" or kv.get("nam") not in mine:
-                continue
-            if ok_nums and kv.get("num", "").lower() not in ok_nums:
-                continue
-            for m in self.meters:
-                if m[0] == kv["nam"] and m[1] != mid:
-                    self.emu.log("FLEX radio: meter %s is number %d on the radio (not %d) - using %d"
-                                 % (m[0], mid, m[1], mid))
-                    m[1] = mid
+        # the amp's own connection hears every meter status; the tuner's connection does not subscribe,
+        # so the amp's connection also corrects the tuner's meter numbers
+        groups = [(self, PGXL_MODEL)]
+        if self.role == "PGXL" and getattr(self.emu, "link_t", None):
+            groups.append((self.emu.link_t, TGXL_MODEL))
+        for link, model in groups:
+            mine = set(n for n, _, _ in link.meters)
+            ok_nums = set(x.lower() for x in (link.handles.get(model, ""),
+                                              "0x" + link.radio_handle if link.radio_handle else "") if x)
+            for mid, kv in items.items():
+                if kv.get("src") != "AMP" or kv.get("nam") not in mine:
+                    continue
+                if ok_nums and kv.get("num", "").lower() not in ok_nums:
+                    continue
+                for m in link.meters:
+                    if m[0] == kv["nam"] and m[1] != mid:
+                        self.emu.log("FLEX radio: %s meter %s is number %d on the radio (not %d) - using %d"
+                                     % ("tuner" if link is not self else "amp", m[0], mid, m[1], mid))
+                        m[1] = mid
 
     # ---- running ------------------------------------------------------
     def _pick_variant(self):
@@ -918,9 +943,28 @@ class FlexRadioLink(threading.Thread):
             pass
 
 
+FLEX_MATCH = ""          # set from --flex-radio-match
+LAST_RADIOS = []         # every radio heard by the last search: (ip, model, name, serial)
+
+
 def discover_radio(timeout, stop):
-    """Listen for a FlexRadio's broadcast and return its address (or '')."""
+    """Listen for FlexRadio broadcasts and return the address of the radio to use (or '').
+    With several radios on the network, FLEX_MATCH (model, name, serial or address) picks one;
+    without it the first radio heard is used. LAST_RADIOS lists everything that was heard."""
+    global LAST_RADIOS
+    seen, first_t = [], None
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def _find(text, key):
+        m = re.search(r"\b%s=(\S+)" % key, text)
+        return m.group(1) if m else ""
+
+    def _chosen():
+        want = FLEX_MATCH.lower()
+        for r in seen:
+            if want in " ".join(r).lower():
+                return r[0]
+        return ""
     try:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if hasattr(socket, "SO_REUSEPORT") and os.name != "nt":
@@ -932,11 +976,21 @@ def discover_radio(timeout, stop):
             try:
                 d, _ = s.recvfrom(4096)
             except socket.timeout:
-                continue
+                d = b""
             text = d.decode("ascii", "ignore")
             m = re.search(r"\bip=(\d+\.\d+\.\d+\.\d+)", text)
-            if m:
-                return m.group(1)
+            if m and m.group(1) not in [r[0] for r in seen]:
+                seen.append((m.group(1), _find(text, "model"), _find(text, "nickname"), _find(text, "serial")))
+                LAST_RADIOS = list(seen)
+                if first_t is None:
+                    first_t = time.time()
+            if FLEX_MATCH and _chosen():
+                return _chosen()
+            # without a name to match, listen a little longer so a second radio is noticed too
+            if seen and not FLEX_MATCH and time.time() - first_t >= 3.0:
+                return seen[0][0]
+        if seen and not FLEX_MATCH:
+            return seen[0][0]
     except OSError:
         return ""
     finally:
@@ -961,6 +1015,8 @@ class FlexEmulation:
         self.radio_ip = (getattr(a, "flex_radio_ip", "") or "").strip()
         self.radio_ip_found = ""
         self.radio_fallback = (getattr(a, "flex_radio_fallback_ip", "") or "").strip()
+        global FLEX_MATCH
+        FLEX_MATCH = (getattr(a, "flex_radio_match", "") or "").strip()
         self.radio_port = int(getattr(a, "flex_radio_port", 4992))
         self.meter_port = int(getattr(a, "flex_meter_port", 4991))
         self.tuner = not getattr(a, "flex_no_tuner", False)
@@ -1815,6 +1871,37 @@ def selftest(verbose=False):
     check("auto finds nothing -> the fallback address is used and registers",
           wait(lambda: emu4.link.state == "registered") and emu4.link.radio_ip == "127.0.0.1")
     discover_radio = _orig
+    # two FlexRadios on the network: --flex-radio-match chooses; without it the first one heard is used
+    global FLEX_MATCH
+    pk6700 = b"discovery_protocol_version=3.0.0.2 model=FLEX-6700 serial=1111-2222 nickname=Remote ip=192.168.0.50 port=4992"
+    pk6300 = b"discovery_protocol_version=3.0.0.2 model=FLEX-6300 serial=3333-4444 nickname=Shack ip=192.168.0.60 port=4992"
+
+    def _search(match, secs):
+        global FLEX_MATCH
+        FLEX_MATCH = match
+        out = []
+        th = threading.Thread(target=lambda: out.append(discover_radio(secs, threading.Event())))
+        th.start()
+        tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        t_end = time.time() + secs + 1
+        while th.is_alive() and time.time() < t_end:
+            for pk in (pk6700, pk6300):
+                tx.sendto(pk, ("127.0.0.1", 4992))
+            time.sleep(0.3)
+        tx.close()
+        th.join(secs + 2)
+        return out[0] if out else None
+
+    got = _search("6300", 6.0)
+    check("two radios on the network: --flex-radio-match 6300 logs in to the 6300", got == "192.168.0.60")
+    got = _search("shack", 6.0)
+    check("... and the radio's name works too", got == "192.168.0.60")
+    got = _search("", 6.0)
+    check("no match given: the first radio heard is used and both are listed",
+          got in ("192.168.0.50", "192.168.0.60") and len(LAST_RADIOS) == 2)
+    got = _search("9999", 3.0)
+    check("a match that fits no radio finds nothing (never the wrong radio)", got == "")
+    FLEX_MATCH = ""
     b4.stop.set()
     fr3.stop = True
     fr.stop = fr2.stop = True

@@ -213,8 +213,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "3.0g"
-BUILD_DATE = "2026-11-18"
+VERSION = "3.0ga"
+BUILD_DATE = "2026-11-24"
 
 # Flex part (v3.0): shows the KPA1500 to FlexRadio SmartSDR as a PGXL amplifier and TGXL tuner.
 # Lives in its own file; nothing happens unless --flex-emulate is given.
@@ -1762,7 +1762,7 @@ body.stale #app>*{opacity:.45}
   <button class="btn hb" id="h_amp">AMP</button>
   <span class="sp"></span>
   <span class="badge"><i class="dot" id="dRadio"></i><span id="tRadio">radio ?</span></span>
-  <span class="badge" id="bFlex" style="display:none" title="FlexRadio the amplifier and tuner are registered with"><i class="dot on"></i><span id="tFlex"></span></span>
+  <span class="badge" id="bFlex" style="display:none" title="The FlexRadio the amplifier and tuner log in to (green = registered)"><i class="dot on"></i><span id="tFlex"></span></span>
   <span class="badge" id="bActive" style="display:none" title="The radio the amplifier is following now"></span>
   <span class="badge" id="bMode">--</span>
   <button class="ib" id="bSkin" title="Change how this window looks">&#9998; Look</button>
@@ -1883,9 +1883,11 @@ function render(s){
  S=s;fitSoon();const m=s.mm||{};
  $('bDown').classList.remove('show');document.body.classList.remove('stale');
  const rn={thetis:'Thetis',nereus:'NereusSDR'}[s.radio]||'radio program';
- $('tRadio').textContent=(s.tci?rn:(s.radio?rn+' - waiting':'waiting'))+(s.radio_multi?' ['+s.radio_owner+']':'');$('dRadio').className='dot'+(s.tci?' on':'');
+ $('tRadio').textContent=(s.tci?'Radio: '+rn:(s.radio?rn+' - waiting':'Radio: none'))+(s.radio_multi?' ['+s.radio_owner+']':'');$('dRadio').className='dot'+(s.tci?' on':'');
  {const fr=s.flex&&s.flex.radio,fi=fr&&fr.info||{},ft=[fi.name,fi.model,fi.callsign].filter(Boolean).join(' ');
-  $('bFlex').style.display=(fr&&fr.state==='registered')?'':'none';$('tFlex').textContent='Flex: '+(ft||fr&&fr.ip||'');
+  const fok=!!(fr&&fr.state==='registered');
+  $('bFlex').style.display=(s.flex&&fr)?'':'none';$('bFlex').firstChild.className='dot'+(fok?' on':'');
+  $('tFlex').textContent='Flex: '+(fok?(ft||fr.ip||'connected'):((fr&&fr.state)||'off')+(fr&&fr.ip&&fr.ip!=='auto'?' '+fr.ip:''));
   const ar=s.active_radio,both=s.tci&&fr&&fr.state==='registered';
   $('bActive').style.display=both&&ar?'':'none';$('bActive').textContent='Amp follows: '+(ar==='flex'?'Flex':rn);}
  $('bMode').textContent=(m.amp_power&&m.amp_power!=='ON')?m.amp_power:(m.amp_mode||'--');
@@ -6159,9 +6161,14 @@ SWR %tatg.amp_swr%   TMP %tatg.amp_temp% C   FLT %tatg.amp_fault_text%
         _TABLE(["Setting (start file)", "What it does"], [
             ["FLEX_RADIO_IP = auto", "Look for the radio on the network. If none is found the bridge says so once and keeps looking quietly, so it is safe to leave on when you only use Thetis. Empty = never look for a Flex radio."],
             ["FLEX_RADIO_FALLBACK_IP", "An address to use only when the search finds nothing."],
+            ["FLEX_RADIO_MATCH", "With two or more FlexRadios on the network: part of the radio's model, name or serial number (for example 6300). The bridge then logs in to that radio. Empty = the first radio it hears."],
             ["FLEX_INTERLOCK = 1", "Also make the radio wait for the amplifier before it transmits (experimental). 0 = no."],
             ["FLEX_VERBOSE = 1", "Log every message to and from the Flex radio. Use it only when something does not work."],
         ]),
+        _P("**More than one FlexRadio?** The search uses the first radio it hears unless you say which one. The bridge log lists "
+           "every radio it found (look for `FLEX radio: found 2 FlexRadios`). If it picked the wrong one, set FLEX_RADIO_MATCH, for "
+           "example `6300`, or give the radio's address in FLEX_RADIO_IP. SmartSDR or Maestro on the other radio will not show the "
+           "amplifier."),
         _P("**What you see in SmartSDR.** PGXL: forward power, return loss, drive, current and temperature meters, Operate/Standby. "
            "TGXL: Operate, Bypass and Tune buttons (press Tune again to cancel), return-loss and forward-power meters, and the "
            "tuner's L and C bars. The KPA1500 has one capacitor bank, so only one of C1 or C2 ever shows; the other stays empty."),
@@ -6178,6 +6185,7 @@ SWR %tatg.amp_swr%   TMP %tatg.amp_temp% C   FLT %tatg.amp_fault_text%
         _P("**SmartLink (SmartSDR from outside your home).** The bridge needs nothing for it: SmartLink goes to the radio, not to the bridge. "
            "In your router forward TCP 4994 and UDP 4993 to the radio (give the radio a fixed address first). The amplifier then shows in SmartSDR on your phone too."),
         _UL("The radio does not answer at all after many tries (the log says it sent no greeting): switch the radio off and on. This is a radio-side state; the bridge cannot clear it.",
+            "The PGXL or TGXL meter bars are empty on a Maestro (or SmartSDR) after you restarted the bridge: power-cycle the Maestro (or close and reopen SmartSDR) so it reads the meters again. This was needed on a FLEX-6300 after the bridge was restarted; the radio itself did not need a power cycle.",
             "SmartSDR shows no PGXL: check `/flex` on the status page and the firewall ports above.",
             "Run only one bridge at a time. This one closes another bridge that is running. Do not use it together with the Zeus KPA1500 add-on."),
     ]))
