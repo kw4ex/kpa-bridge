@@ -518,6 +518,8 @@ class FlexRadioLink(threading.Thread):
                         self.tunepower = max(0, min(100, int(float(kv["tunepower"]))))
                 except ValueError:
                     pass
+                if "tune" in kv:
+                    self._tune_status(kv["tune"] == "1")
             elif body.startswith("slice ") and self.role == "PGXL":
                 self._slice_status(body)
             elif body.startswith("meter ") and self.meters:
@@ -571,6 +573,9 @@ class FlexRadioLink(threading.Thread):
         was_tx, self.radio_tx = self.radio_tx, False
         if was_tx:
             self.emu.tx_changed()
+        if getattr(self, "radio_tune", False):          # lost the radio during a TUNE: do not leave the amp in STANDBY
+            self.radio_tune = False
+            self.emu.tune_changed(False)
         self.buf, self.todo = b"", []
         if s:
             try:
@@ -677,6 +682,8 @@ class FlexRadioLink(threading.Thread):
             self._create_device("TGXL", tgxl)
             if e.meters_on:
                 self._create_meters(METERS_T)
+                if getattr(e, "link", None):
+                    e.link.recheck_meters()
             return
         pgxl = ["ip=%s port=%d model=%s serial_num=%s ant=ANT1:PORTA,ANT2:PORTB"
                 % (e.adv_ip, e.pgxl.port, PGXL_MODEL, e.serial)]
@@ -766,6 +773,13 @@ class FlexRadioLink(threading.Thread):
                     self.rx_vals[ours[mid]] = raw
                     self.rx_count += 1
 
+    def _tune_status(self, on):
+        """the radio's TUNE started or stopped (any client: Maestro, SmartSDR, a phone)"""
+        if on == getattr(self, "radio_tune", False):
+            return
+        self.radio_tune = on
+        self.emu.tune_changed(on)
+
     def _slice_status(self, body):
         """'slice 0 RF_frequency=14.200000 tx=1 active=1 ...' (later lines carry only what changed)"""
         m = re.match(r"slice\s+(\d+)\s*(.*)$", body)
@@ -814,6 +828,18 @@ class FlexRadioLink(threading.Thread):
             m = re.match(r"(\d+)\.(\w+)=(.*)$", part.strip())
             if m:
                 items.setdefault(int(m.group(1)), {})[m.group(2)] = m.group(3)
+        cache = self.__dict__.setdefault("_meter_cache", {})      # remembered, so meters created later can still be matched
+        for mid, kv in items.items():
+            cache.setdefault(mid, {}).update(kv)
+        self._apply_meter_items(cache)
+
+    def recheck_meters(self):
+        """the tuner's meters are created after the radio has already announced them: match them now"""
+        cache = getattr(self, "_meter_cache", None)
+        if cache:
+            self._apply_meter_items(cache)
+
+    def _apply_meter_items(self, items):
         # the amp's own connection hears every meter status; the tuner's connection does not subscribe,
         # so the amp's connection also corrects the tuner's meter numbers
         groups = [(self, PGXL_MODEL)]
@@ -1035,6 +1061,7 @@ class FlexEmulation:
         self.tuner_bypass = False
         self._tuner_cmd_t = 0.0
         self._tune_t = 0.0
+        self._tune_lock = threading.Lock()
         self._ctl_lock = threading.Lock()
         self.pgxl = DeviceServer(self, "PGXL", int(getattr(a, "flex_pgxl_port", 9008)),
                                  "V" + PGXL_FIRMWARE, self.pgxl_command)
@@ -1062,6 +1089,21 @@ class FlexEmulation:
                 f()
             except Exception as e:
                 self.log("FLEX: software key follow error: %s" % e)
+
+    def tune_changed(self, on):
+        """the radio started or stopped a TUNE: let the bridge do Standby on Tune (amp to STANDBY, then back)"""
+        f = getattr(self.b, "handle_tune", None)
+        if not f:
+            return
+        self.log("FLEX radio: TUNE %s" % ("started" if on else "ended"))
+
+        def run():
+            with self._tune_lock:
+                try:
+                    f(on)
+                except Exception as e:
+                    self.log("FLEX: Standby on Tune error: %s" % e)
+        threading.Thread(target=run, daemon=True).start()
 
     def note_unknown(self, text):
         self.unknown = (self.unknown + [time.strftime("%H:%M:%S ") + text])[-20:]
@@ -1419,6 +1461,10 @@ class _FakeBridge:
         self.active = "flex"          # which radio the amp follows (the real bridge decides this)
         self.atu_c, self.atu_l, self.atu_side = 0x2C, 0x0A, "A"
         self.key_calls = 0
+        self.tune_calls = []
+
+    def handle_tune(self, active):
+        self.tune_calls.append(active)
 
     def key_follow(self):
         self.key_calls += 1
@@ -1792,6 +1838,30 @@ def selftest(verbose=False):
     fr.push("S0|transmit tunepower=25")
     check("login: a partial transmit line changes only what it carries",
           wait(lambda: emu2.link.tunepower == 25, 3) and emu2.link.rfpower == 90)
+    # --- the radio announces the tuner's meters before the tuner link has recorded them
+    saved = list(tm.meters)
+    tm.meters[:] = []
+    th = tm.handles.get("TunerGeniusXL", "0x0BF80A6D")
+    emu2.link._meter_cache = {}
+    fr.push("S0|meter 71.src=AMP#71.num=%s#71.nam=RL#72.src=AMP#72.num=%s#72.nam=FWD" % (th, th))
+    time.sleep(0.5)
+    tm.meters[:] = [["RL", 5, METER_STREAM_ID], ["FWD", 6, METER_STREAM_ID]]
+    emu2.link.recheck_meters()
+    check("login: tuner meter numbers announced BEFORE the tuner link knew its meters are still corrected",
+          {m[0]: m[1] for m in tm.meters} == {"RL": 71, "FWD": 72})
+    tm.meters[:] = saved
+    fr.push("S0|transmit tune=1")
+    check("login: the radio's TUNE starting (transmit tune=1) reaches the bridge's Standby on Tune",
+          wait(lambda: emu2.b.tune_calls == [True], 3))
+    fr.push("S0|transmit tune=1")
+    time.sleep(0.4)
+    check("login: the same TUNE status repeated does not start a second tune", emu2.b.tune_calls == [True])
+    fr.push("S0|transmit tune=0")
+    check("login: the radio's TUNE ending (transmit tune=0) puts the amp back",
+          wait(lambda: emu2.b.tune_calls == [True, False], 3))
+    fr.push("S0|transmit rfpower=80")
+    time.sleep(0.4)
+    check("login: a transmit line without 'tune' changes nothing about the tune", emu2.b.tune_calls == [True, False])
     emu2.link.todo.append(("rfpower", 80))
     check("login: asking for a lower RF power sends 'transmit set rfpower=80'",
           wait(lambda: "transmit set rfpower=80" in fr.cmds, 3) and wait(lambda: emu2.link.rfpower == 80, 3))

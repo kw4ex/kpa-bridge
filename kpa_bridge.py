@@ -213,7 +213,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "3.0ga"
+VERSION = "3.0gc"
 BUILD_DATE = "2026-11-24"
 
 # Flex part (v3.0): shows the KPA1500 to FlexRadio SmartSDR as a PGXL amplifier and TGXL tuner.
@@ -5605,6 +5605,10 @@ def help_sections():
            "ends it puts the amplifier back as it was: OPERATE returns to OPERATE, and an "
            "amplifier that was already in STANDBY stays there. Each step is read back and "
            "confirmed in the window."),
+        _P("**With a FlexRadio** the same happens when you press TUNE on the Maestro, in SmartSDR or on a phone: "
+           "the bridge sees the radio's TUNE status and puts the amplifier in STANDBY, then back when the tune ends. "
+           "As with Thetis' own TUNE button, the radio starts the tune first, so a few milliseconds of RF can reach "
+           "the amplifier before STANDBY. Keep the TUNE power low."),
         _UL("Switch it on or off with the **SOT** tile, the **S** key, or `--no-standby-on-tune`.",
             "If the connection to Thetis drops during a tune, the amplifier is left in STANDBY "
             "on purpose (fail-safe). Set OPERATE yourself afterwards."),
