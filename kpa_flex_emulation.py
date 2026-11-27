@@ -560,6 +560,10 @@ class FlexRadioLink(threading.Thread):
                 self._drop()
             # be gentle with the radio: wait longer after each failed try (5, 10, 20, 40, then 60 seconds)
             # and start again at 5 seconds once a login has worked
+            if self.role == "TGXL" and self.state == "searching":
+                self._fails = 0                       # only waiting for the amplifier login: no back-off, look again soon
+                self.emu.stop.wait(1.0)
+                continue
             if self.state == "registered":
                 self._fails = 0
             self._fails = getattr(self, "_fails", 0) + 1

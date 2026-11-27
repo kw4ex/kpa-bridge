@@ -213,7 +213,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "3.0gc"
+VERSION = "3.0ge"
 BUILD_DATE = "2026-11-24"
 
 # Flex part (v3.0): shows the KPA1500 to FlexRadio SmartSDR as a PGXL amplifier and TGXL tuner.
@@ -1775,6 +1775,7 @@ body.stale #app>*{opacity:.45}
   <div class="ban warn" id="bDrive"></div>
   <div class="ban warn" id="bPort"></div>
   <div class="ban warn" id="bTake"></div>
+  <div class="ban warn" id="bAmpDown"><span id="tAmpDown"></span> <button class="ib" id="bAmpFind" title="Search the network for the amplifier">Find amplifier</button></div>
   <div class="ban bad" id="bDown">BRIDGE NOT RUNNING - data frozen</div>
  </div>
  <div class="sec" id="s_telemetry" data-sec="telemetry"><h2>Telemetry</h2><div class="grid" id="gTel"></div></div>
@@ -1860,6 +1861,19 @@ BUTTONS.forEach(b=>{
  e.onclick=()=>press(b);$('gBtn').appendChild(e);
 });
 function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',/^Refused|Could not|not /i.test(t)?9000:2500);}
+let amp_busy=false;
+$('bAmpFind').onclick=async()=>{
+ if(amp_busy)return;amp_busy=true;$('bAmpFind').disabled=true;$('tAmpDown').textContent='Searching the network for the amplifier (about 15 seconds) ...';
+ const j=await post('amp_find');
+ let msg=j.message||'Search finished';
+ try{const r=await fetch('/api/state'+Q);const st=await r.json();const f=st.found||[];
+  if(f.length===1&&f[0].ip&&f[0].ip!==st.amp_ip){const k=await post('amp_ip',{ip:f[0].ip});msg='Found the amplifier at '+f[0].ip+'. '+(k.message||'Address changed.');}
+  else if(f.length===1)msg='The amplifier is at '+f[0].ip+', the address already in use. Check that no other program is connected to it.';
+  else if(f.length>1)msg='Found '+f.length+' amplifiers: '+f.map(a=>a.ip).join(', ')+'. Choose one in the Panel under Settings.';
+ }catch(e){}
+ $('tAmpDown').textContent=msg;toast(msg);
+ setTimeout(()=>{amp_busy=false;$('bAmpFind').disabled=false;},9000);
+};
 async function post(action,params){
  try{const r=await fetch('/api/cmd'+Q,{method:'POST',headers:{'Content-Type':'application/json','X-KPA':'1'},body:JSON.stringify({action:action,params:params||{}})});
   const j=await r.json();return j;}catch(e){return {ok:false,message:'Could not reach the bridge'};}
@@ -1894,6 +1908,7 @@ function render(s){
  $('hFreq').textContent=m.amp_freq||'---';const bw=$('bFollow');if(m.amp_following===0&&/!/.test(m.amp_freq_line||'')){bw.textContent='Amp frequency: '+m.amp_freq_line;bw.classList.add('show');}else bw.classList.remove('show');
  const bf=$('bFault');if(m.amp_fault){bf.textContent='FAULT: '+(m.amp_fault_text||m.amp_fault);bf.classList.add('show');}else bf.classList.remove('show');
  const bn=$('bNoAnt');if(m.noant==1){bn.textContent=m.noant_text||'ANTENNA?';bn.classList.add('show');}else bn.classList.remove('show');
+ {const ba=$('bAmpDown');if(s.amp===false&&!s.dry_run&&!amp_busy){$('tAmpDown').textContent='Amplifier not answering at '+(s.amp_ip||'?')+'.';ba.classList.add('show');}else if(!amp_busy)ba.classList.remove('show');}
  const bt=$('bTake');if(bt){if(s.take_warn){bt.textContent=s.take_warn;bt.classList.add('show');}else bt.classList.remove('show');}
  const bp=$('bPort');if(m.portwarn==1){bp.textContent=m.portwarn_text||'A WINDOWS RESERVED PORT BLOCKS THETIS - see Help';bp.classList.add('show');}else bp.classList.remove('show');
  const bd=$('bDrive');if(m.drvlim==1){bd.textContent=m.drvlim_text||'DRIVE OVER LIMIT';bd.classList.add('show');}else bd.classList.remove('show');
@@ -7636,6 +7651,8 @@ async function lpSet(port){
 function ampStatus(s){
  $('d_ampstat').textContent=s.finding?'Searching the network...':('Now: '+s.amp_ip+':'+s.amp_port+' - '+(s.amp?'responding':'not responding')+
   (s.amp_ip_source==='flag'?' (set by --amp-ip)':''));
+ const f=(s.found||[]).filter(a=>a.ip&&a.ip!==s.amp_ip);
+ if(!s.finding&&!s.amp&&f.length)$('d_ampstat').textContent+='  -  FOUND an amplifier at '+f.map(a=>a.ip).join(', ')+': click "Use this address".';
 }
 function showFound(s){
  const sel=$('d_ampfound');sel.textContent='';const f=s.found||[];
