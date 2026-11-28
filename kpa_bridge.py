@@ -213,7 +213,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
-VERSION = "3.0ge"
+VERSION = "3.0gf"
 BUILD_DATE = "2026-11-24"
 
 # Flex part (v3.0): shows the KPA1500 to FlexRadio SmartSDR as a PGXL amplifier and TGXL tuner.
@@ -1893,7 +1893,9 @@ function setMeter(m,v){
  e.querySelector('.pk').style.left=Math.min(98.5,pp)+'%';
  e.querySelector('.mv').textContent=(m[4]===1&&m[5]===3?v.toFixed(1):(Math.abs(v)<100&&m[3]!=='W'?v.toFixed(1):Math.round(v)))+' '+m[3];
 }
+let seenVer=null;
 function render(s){
+ if(s.version){if(seenVer&&s.version!==seenVer){location.reload();return;}seenVer=s.version;}   // the bridge was updated: load the new page
  S=s;fitSoon();const m=s.mm||{};
  $('bDown').classList.remove('show');document.body.classList.remove('stale');
  const rn={thetis:'Thetis',nereus:'NereusSDR'}[s.radio]||'radio program';
